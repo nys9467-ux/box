@@ -1,0 +1,6 @@
+{
+  "name": "일별 박스오피스 조회",
+  "description": "KOBIS Open API를 활용한 일별 박스오피스 순위 및 영화 상세 정보 조회 서비스",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
