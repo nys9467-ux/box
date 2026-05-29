@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState } from "react";
 import { MovieInfo, MovieInfoAPIResponse } from "../types";
-import { X, Film, Clock, Globe, Award, ShieldAlert, Users, Building, HelpCircle } from "lucide-react";
+import { X, Film, Clock, Globe, Award, ShieldAlert, Users, Building, HelpCircle, Sparkles, Copy, Check } from "lucide-react";
 
 interface MovieDetailsModalProps {
   movieCd: string;
@@ -25,6 +25,63 @@ export default function MovieDetailsModal({
   const [loading, setLoading] = useState<boolean>(true);
   const [movieInfo, setMovieInfo] = useState<MovieInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [keyword1, setKeyword1] = useState<string>("");
+  const [keyword2, setKeyword2] = useState<string>("");
+  const [keyword3, setKeyword3] = useState<string>("");
+  const [aiReview, setAiReview] = useState<string>("");
+  const [reviewLoading, setReviewLoading] = useState<boolean>(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
+
+  const handleGenerateReview = async () => {
+    if (!keyword1.trim() || !keyword2.trim() || !keyword3.trim()) {
+      setReviewError("키워드 3개를 모두 입력해주세요.");
+      return;
+    }
+    setReviewLoading(true);
+    setReviewError(null);
+    setCopySuccess(false);
+
+    try {
+      const gList = movieInfo?.genres?.map((g) => g.genreNm).join(", ") || "";
+      const dList = movieInfo?.directors?.map((d) => d.peopleNm).join(", ") || "";
+      
+      const res = await fetch("/api/review", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          movieNm: movieInfo?.movieNm || movieNm,
+          keywords: [keyword1.trim(), keyword2.trim(), keyword3.trim()],
+          genres: gList,
+          directors: dList,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "감상평을 만드는데 실패했습니다.");
+      }
+
+      const data = await res.json();
+      setAiReview(data.review || "");
+    } catch (err: any) {
+      console.error(err);
+      setReviewError(err.message || "감상평을 생성할 수 없습니다. 다시 시도해주세요.");
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleCopyReview = () => {
+    if (!aiReview) return;
+    navigator.clipboard.writeText(aiReview).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -338,6 +395,138 @@ export default function MovieDetailsModal({
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 italic">등록된 제작사/배급사 정보가 없습니다.</p>
+                )}
+              </div>
+
+              {/* AI Review Generator Section */}
+              <div 
+                id="ai-review-section"
+                className="p-5 md:p-6 rounded-2xl border transition-all mt-6"
+                style={{
+                  backgroundColor: isDark ? "rgba(30, 41, 59, 0.35)" : "#f8fafc",
+                  borderColor: isDark ? "rgba(234, 179, 8, 0.2)" : "rgba(234, 179, 8, 0.3)",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-7 h-7 bg-yellow-500/10 rounded-lg flex items-center justify-center border border-yellow-500/20">
+                    <Sparkles className="w-4 h-4 text-yellow-500 animate-pulse" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black tracking-tight flex items-center gap-1.5"
+                      style={{ color: isDark ? "#ffffff" : "#0f172a" }}>
+                      AI 키워드 감상평 생성기
+                    </h4>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                      3가지 키워드를 입력하시면 AI가 맞춤형 감상평을 작성해 드립니다.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">키워드 1</label>
+                    <input
+                      type="text"
+                      value={keyword1}
+                      onChange={(e) => setKeyword1(e.target.value)}
+                      placeholder="예) 긴장감 넘치는"
+                      maxLength={15}
+                      className="w-full text-xs px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-yellow-500 font-medium transition-all"
+                      style={{
+                        backgroundColor: isDark ? "rgba(15, 23, 42, 0.5)" : "#ffffff",
+                        borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(15, 23, 42, 0.12)",
+                        color: isDark ? "#ffffff" : "#0f172a",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">키워드 2</label>
+                    <input
+                      type="text"
+                      value={keyword2}
+                      onChange={(e) => setKeyword2(e.target.value)}
+                      placeholder="예) 압도적인 몰입감"
+                      maxLength={15}
+                      className="w-full text-xs px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-yellow-500 font-medium transition-all"
+                      style={{
+                        backgroundColor: isDark ? "rgba(15, 23, 42, 0.5)" : "#ffffff",
+                        borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(15, 23, 42, 0.12)",
+                        color: isDark ? "#ffffff" : "#0f172a",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 mb-1">키워드 3</label>
+                    <input
+                      type="text"
+                      value={keyword3}
+                      onChange={(e) => setKeyword3(e.target.value)}
+                      placeholder="예) 꼭 봐야할 명작"
+                      maxLength={15}
+                      className="w-full text-xs px-3 py-2 border rounded-lg focus:outline-none focus:ring-1 focus:ring-yellow-500 font-medium transition-all"
+                      style={{
+                        backgroundColor: isDark ? "rgba(15, 23, 42, 0.5)" : "#ffffff",
+                        borderColor: isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(15, 23, 42, 0.12)",
+                        color: isDark ? "#ffffff" : "#0f172a",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 items-center mb-4">
+                  {reviewError && (
+                    <span className="text-[11px] font-medium text-rose-500 mr-auto">
+                      ⚠️ {reviewError}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleGenerateReview}
+                    disabled={reviewLoading}
+                    className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-slate-950 font-extrabold text-xs rounded-xl flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {reviewLoading ? "감상평 조형 중..." : "AI 감상평 작성"}
+                  </button>
+                </div>
+
+                {/* Return values Display container */}
+                {(reviewLoading || aiReview) && (
+                  <div 
+                    id="generated-review-box"
+                    className="p-4 rounded-xl border relative overflow-hidden transition-all duration-300"
+                    style={{
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.3)" : "#ffffff",
+                      borderColor: isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(15, 23, 42, 0.08)",
+                    }}
+                  >
+                    {reviewLoading ? (
+                      <div className="flex flex-col gap-2 py-2">
+                        <div className="h-4 w-3/4 bg-slate-300/25 dark:bg-slate-700/35 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-slate-300/25 dark:bg-slate-700/35 rounded animate-pulse" />
+                        <div className="h-4 w-5/6 bg-slate-300/25 dark:bg-slate-700/35 rounded animate-pulse" />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs md:text-sm font-medium leading-relaxed pr-8 whitespace-pre-line"
+                          style={{ color: isDark ? "#cbd5e1" : "#334155" }}>
+                          {aiReview}
+                        </p>
+                        
+                        {/* Copy button */}
+                        <button
+                          onClick={handleCopyReview}
+                          title="감상평 복사하기"
+                          className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all cursor-pointer border border-transparent hover:border-slate-800"
+                        >
+                          {copySuccess ? (
+                            <Check className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
