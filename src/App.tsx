@@ -7,13 +7,13 @@ import React, { useState, useEffect } from "react";
 import { DailyBoxOfficeItem, BoxOfficeAPIResponse } from "./types";
 import ThemeToggle from "./components/ThemeToggle";
 import SkeletonList from "./components/SkeletonList";
-import BoxOfficeList, { formatNumber } from "./components/BoxOfficeList";
+import BoxOfficeList, { formatNumber, GroupedBoxOffice } from "./components/BoxOfficeList";
 import MovieDetailsModal from "./components/MovieDetailsModal";
-import { Film, Calendar, AlertTriangle, RefreshCw, Trophy, Users, Monitor, Sparkles, ChevronRight, Github } from "lucide-react";
+import { Film, Calendar, AlertTriangle, RefreshCw, Trophy, Users, ListFilter, Sparkles, ChevronDown, PlusCircle } from "lucide-react";
 
 // Get yesterday's date string as "YYYY-MM-DD"
 function getYesterdayDateString(): string {
-  const date = new Date("2026-05-29T02:08:48Z"); // Use reference date/time or current Date
+  const date = new Date("2026-05-29T02:08:48Z"); // Reference time
   try {
     const yesterday = new Date(date);
     yesterday.setDate(yesterday.getDate() - 1);
@@ -26,18 +26,33 @@ function getYesterdayDateString(): string {
   }
 }
 
+// Subtract days to calculate previous targetDates
+function subtractDays(dateStr: string, daysToSubtract: number): string {
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    d.setDate(d.getDate() - daysToSubtract);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 export default function App() {
   const yesterdayStr = getYesterdayDateString();
   const [selectedDate, setSelectedDate] = useState<string>(yesterdayStr);
   const [isDark, setIsDark] = useState<boolean>(true);
-  const [movies, setMovies] = useState<DailyBoxOfficeItem[]>([]);
+  const [daysCount, setDaysCount] = useState<number>(1);
+  const [groupedMovies, setGroupedMovies] = useState<GroupedBoxOffice[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedMovieCd, setSelectedMovieCd] = useState<string | null>(null);
   const [selectedMovieRank, setSelectedMovieRank] = useState<string>("1");
   const [selectedMovieNm, setSelectedMovieNm] = useState<string>("");
 
-  // Sync state to classList on <html> for potential global styles/tailwind class variations
+  // Sync state to classList on <html>
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDark) {
@@ -47,52 +62,77 @@ export default function App() {
     }
   }, [isDark]);
 
-  const fetchBoxOffice = async (dateYmd: string) => {
+  const fetchConsecutiveBoxOffice = async (baseDateYmd: string, targetDays: number) => {
     setLoading(true);
     setError(null);
     try {
-      // Remove '-' from 'YYYY-MM-DD' to get 'YYYYMMDD'
-      const formattedDate = dateYmd.replace(/-/g, "");
-      const response = await fetch(`/api/boxoffice?date=${formattedDate}`);
+      const fetchPromises = [];
       
-      if (!response.ok) {
-        throw new Error(`서버에 요쳥을 실패했습니다. 상태 코드: ${response.status}`);
+      for (let i = 0; i < targetDays; i++) {
+        const currentDateStr = subtractDays(baseDateYmd, i);
+        const formattedDate = currentDateStr.replace(/-/g, "");
+        
+        fetchPromises.push(
+          fetch(`/api/boxoffice?date=${formattedDate}`)
+            .then(async (res) => {
+              if (!res.ok) {
+                throw new Error(`${currentDateStr} 데이터를 받아오지 못했습니다.`);
+              }
+              const data: BoxOfficeAPIResponse = await res.json();
+              return {
+                date: currentDateStr,
+                items: data.boxOfficeResult?.dailyBoxOfficeList || []
+              };
+            })
+            .catch((err) => {
+              console.error(err);
+              return {
+                date: currentDateStr,
+                items: [] as DailyBoxOfficeItem[]
+              };
+            })
+        );
       }
 
-      const data: BoxOfficeAPIResponse = await response.json();
+      const results = await Promise.all(fetchPromises);
       
-      if (data.boxOfficeResult?.dailyBoxOfficeList) {
-        setMovies(data.boxOfficeResult.dailyBoxOfficeList);
-      } else if (data.error) {
-        setError(data.error);
-        setMovies([]);
+      // Filter out empty lists, but if they are all empty, trigger error
+      const validGroups = results.filter(r => r.items.length > 0);
+      
+      if (validGroups.length === 0) {
+        setError("조회된 기간에 영화 박스오피스 데이터가 존재하지 않습니다.");
+        setGroupedMovies([]);
       } else {
-        setError("영화 데이터를 찾을 수 없습니다.");
-        setMovies([]);
+        setGroupedMovies(results);
       }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "데이터 수신 도중 오류가 발생했습니다.");
-      setMovies([]);
+      setGroupedMovies([]);
     } finally {
       setLoading(false);
     }
   };
 
+  // Re-fetch on date or daysCount changes
   useEffect(() => {
-    fetchBoxOffice(selectedDate);
-  }, [selectedDate]);
+    fetchConsecutiveBoxOffice(selectedDate, daysCount);
+  }, [selectedDate, daysCount]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Reset back to 1 day on base date change to keep focus clean, or keep current daysCount
     setSelectedDate(e.target.value);
   };
 
   const handleSelectMovie = (movieCd: string) => {
-    const movie = movies.find((m) => m.movieCd === movieCd);
-    if (movie) {
-      setSelectedMovieCd(movieCd);
-      setSelectedMovieRank(movie.rank);
-      setSelectedMovieNm(movie.movieNm);
+    for (const group of groupedMovies) {
+      const movie = group.items.find((m) => m.movieCd === movieCd);
+      if (movie) {
+        setSelectedMovieCd(movieCd);
+        setSelectedMovieRank(movie.rank);
+        setSelectedMovieNm(movie.movieNm);
+        break;
+      }
     }
   };
 
@@ -100,9 +140,18 @@ export default function App() {
     setSelectedMovieCd(null);
   };
 
-  // Quick helper: total audience summing for top 10 movies listed
-  const totalAudienceOfRanked = movies.reduce((acc, current) => acc + parseInt(current.audiCnt || "0", 10), 0);
-  const topMovie = movies.find((m) => m.rank === "1");
+  const handleLoadMore = () => {
+    setDaysCount((prev) => prev + 1);
+  };
+
+  // Quick helper stats
+  const topMovie = groupedMovies[0]?.items?.find((m) => m.rank === "1");
+  
+  const totalAudienceOfRanked = groupedMovies.reduce((total, group) => {
+    return total + group.items.reduce((acc, current) => acc + parseInt(current.audiCnt || "0", 10), 0);
+  }, 0);
+
+  const totalLoadedMoviesCount = groupedMovies.reduce((total, group) => total + group.items.length, 0);
 
   return (
     <div
@@ -135,11 +184,34 @@ export default function App() {
           </div>
         </div>
 
-        {/* Desktop & Mobile inline controls */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        {/* Date, Days limits, Mode selectors */}
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          
+          {/* Quick period presets */}
           <div className="flex flex-col items-end">
             <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black mb-0.5">
-              조회 날짜 선택
+              조회 날짜 수
+            </span>
+            <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+              {[1, 3, 5, 7].map((num) => (
+                <button
+                  key={num}
+                  onClick={() => setDaysCount(num)}
+                  className={`px-2 py-0.5 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                    daysCount === num 
+                      ? "bg-yellow-500 text-slate-950 pointer-events-none" 
+                      : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                  }`}
+                >
+                  {num}일
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end">
+            <span className="text-[9px] uppercase tracking-wider text-slate-500 font-black mb-0.5">
+              조회 기준일 선택
             </span>
             <div className="relative">
               <input
@@ -167,7 +239,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 flex flex-col gap-6">
         
         {/* Real-time Insights / Statistics Panel (Density Specific Element) */}
-        {!loading && !error && movies.length > 0 && (
+        {!loading && !error && groupedMovies.length > 0 && (
           <div
             id="summary-kpi-panel"
             className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl border"
@@ -183,7 +255,7 @@ export default function App() {
                   <Trophy className="w-5 h-5 text-yellow-500" />
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="text-[10px] uppercase font-bold text-slate-500">당일 박스오피스 주요작</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500">조회 기준 최고 인기작</span>
                   <span className="text-sm font-bold truncate pr-2">{topMovie.movieNm}</span>
                 </div>
               </div>
@@ -195,7 +267,7 @@ export default function App() {
                 <Users className="w-5 h-5 text-blue-500" />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-slate-500">TOP 10 총 관객수</span>
+                <span className="text-[10px] uppercase font-bold text-slate-500">조회 기간 합산 총 관객수</span>
                 <span className="text-sm font-bold font-mono">
                   {formatNumber(String(totalAudienceOfRanked))}명
                 </span>
@@ -208,9 +280,9 @@ export default function App() {
                 <Calendar className="w-5 h-5 text-emerald-500" />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-slate-500">조회 기준 날짜</span>
+                <span className="text-[10px] uppercase font-bold text-slate-500">조회 총 영화 개수</span>
                 <span className="text-sm font-bold font-mono">
-                  {selectedDate.replace(/-/g, ".")}
+                  총 {totalLoadedMoviesCount}개 영화 작품
                 </span>
               </div>
             </div>
@@ -220,13 +292,13 @@ export default function App() {
         {/* Primary Data List Component container */}
         <section
           id="main-list-section"
-          className="flex-1 rounded-2xl border p-4 sm:p-5 shadow-xs flex flex-col transition-all"
+          className="flex-1 rounded-2xl border p-4 sm:p-5 shadow-xs flex flex-col transition-all gap-5"
           style={{
             backgroundColor: isDark ? "rgba(15, 23, 42, 0.4)" : "#ffffff",
             borderColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.06)",
           }}
         >
-          {loading ? (
+          {loading && groupedMovies.length === 0 ? (
             <SkeletonList />
           ) : error ? (
             /* Error Fallback view */
@@ -245,7 +317,7 @@ export default function App() {
               </div>
               <button
                 id="retry-fetch-btn"
-                onClick={() => fetchBoxOffice(selectedDate)}
+                onClick={() => fetchConsecutiveBoxOffice(selectedDate, daysCount)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white rounded-xl transition-colors cursor-pointer border border-white/5 active:scale-95"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -254,7 +326,22 @@ export default function App() {
             </div>
           ) : (
             /* Box Office Lists representation */
-            <BoxOfficeList items={movies} onSelectMovie={handleSelectMovie} />
+            <div className="space-y-6">
+              <BoxOfficeList groupedItems={groupedMovies} onSelectMovie={handleSelectMovie} />
+              
+              {/* Load more button */}
+              <div className="flex justify-center pt-2">
+                <button
+                  id="load-more-btn"
+                  onClick={handleLoadMore}
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 disabled:pointer-events-none text-slate-950 font-extrabold text-xs tracking-wider rounded-xl transition-all shadow-md active:scale-95 cursor-pointer uppercase"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  {loading ? "불러오는 중..." : "이전 날짜 박스오피스 추가 조회하기 (+1일)"}
+                </button>
+              </div>
+            </div>
           )}
         </section>
       </main>
@@ -269,9 +356,9 @@ export default function App() {
       >
         <div>KOBIS Open API Integration — 2026</div>
         <div className="flex items-center gap-1">
-          <span>Data Refreshed:</span>
+          <span>Data Range:</span>
           <span className="font-mono text-slate-400 font-bold">
-            {selectedDate}
+            {selectedDate} ~ {subtractDays(selectedDate, daysCount - 1)} ({daysCount}일 간)
           </span>
         </div>
       </footer>
