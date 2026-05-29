@@ -9,7 +9,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import SkeletonList from "./components/SkeletonList";
 import BoxOfficeList, { formatNumber, GroupedBoxOffice } from "./components/BoxOfficeList";
 import MovieDetailsModal from "./components/MovieDetailsModal";
-import { Film, Calendar, AlertTriangle, RefreshCw, Trophy, Users, ListFilter, Sparkles, ChevronDown, PlusCircle } from "lucide-react";
+import { Film, Calendar, AlertTriangle, RefreshCw, Trophy, Users, ListFilter, Sparkles, ChevronDown, PlusCircle, Home } from "lucide-react";
 
 // Get yesterday's date string as "YYYY-MM-DD"
 function getYesterdayDateString(): string {
@@ -170,18 +170,36 @@ export default function App() {
           backgroundColor: isDark ? "rgba(15, 23, 42, 0.85)" : "rgba(255, 255, 255, 0.85)",
         }}
       >
-        <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 bg-yellow-500 rounded-lg flex items-center justify-center shadow-lg shadow-yellow-500/20 hover:scale-105 transition-all">
-            <Film className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 bg-yellow-500 rounded-lg flex items-center justify-center shadow-lg shadow-yellow-500/20 hover:scale-105 transition-all">
+              <Film className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-md sm:text-lg font-black tracking-tighter uppercase leading-none">
+                KOBIS <span className="text-yellow-500">Boxoffice</span>
+              </h1>
+              <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
+                Dashboard
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-md sm:text-lg font-black tracking-tighter uppercase leading-none">
-              KOBIS <span className="text-yellow-500">Boxoffice</span>
-            </h1>
-            <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">
-              Dashboard
-            </span>
-          </div>
+
+          {/* Home Navigation Link */}
+          <a
+            href="https://nys9467-ux.github.io/AI2026/"
+            target="_top"
+            id="home-navigation-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all border shadow-xs hover:shadow-md hover:border-yellow-500/40 cursor-pointer active:scale-95"
+            style={{
+              backgroundColor: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(15, 23, 42, 0.04)",
+              borderColor: isDark ? "rgba(255, 255, 255, 0.12)" : "rgba(15, 23, 42, 0.12)",
+              color: isDark ? "#f8fafc" : "#0f172a",
+            }}
+          >
+            <Home className="w-3.5 h-3.5 text-yellow-500" />
+            <span>홈으로</span>
+          </a>
         </div>
 
         {/* Date, Days limits, Mode selectors */}
